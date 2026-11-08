@@ -1,6 +1,6 @@
 # How the agent was developed
 
-This agent was developed with chatGPT. I wanted to implement machine learning in the game agent for making decisions. I tried to train the learner code from teacher code with behavioral cloning. I also implemented the three zone capture where the units will focus on both attacking and defending while capturing zones. I think my agent does the job but it could be improved. Cavalry seems to have problems with limitation policy training whole action score of 56%.
+This agent was developed with chatGPT. I wanted to implement machine learning in the game agent for making decisions. I tried to train the learner code from teacher code with behavioral cloning. I also implemented the three zone capture where the units will focus on both attacking and defending while capturing zones. I think my agent does the job but it could be improved. Cavalry seems to have problems with limitation policy training whole action score of 56%. I think the agent should be working fine since eval results for 20 episodes had a mean score of 99.72.
 
 # Skirmish at Crane Reach: Imitate Your Army
 
