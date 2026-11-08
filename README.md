@@ -1,3 +1,7 @@
+# How the agent was developed
+
+This agent was developed with chatGPT. I wanted to implement machine learning in the game agent for making decisions. I tried to train the learner code from teacher code with behavioral cloning. I also implemented the three zone capture where the units will focus on both attacking and defending while capturing zones. I think my agent does the job but it could be improved. Cavalry seems to have problems with limitation policy training whole action score of 56%.
+
 # Skirmish at Crane Reach: Imitate Your Army
 
 In this example, a game AI agent you already have becomes the **teacher**, and a new agent, the **learner**, learns to imitate it. You record the teacher's choices for footmen, archers, and cavalry, train a small neural network on them with [PyTorch](https://pytorch.org/tutorials/beginner/basics/intro.html), and compare the two armies on new seeds. This approach is called **imitation learning**.

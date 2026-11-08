@@ -22,7 +22,7 @@ one row per entity. Target pointers let the model read the named enemy's token d
 
 from sandbox.crane import me, roster, tile, units, visible, zone
 
-VERSION = "entity-attention-v2"
+VERSION = "entity-attention-v3-home-zone"
 KINDS = ("footman", "archer", "cavalry")
 TERRAINS = ("grass", "hill", "water", "void")
 GROUND_FEATURES = ("none", "forest", "marsh", "waste")
@@ -34,12 +34,19 @@ MOVE_FEATURES = (
     *KINDS,
     "hit_points",
     "visible_enemies",
+    # Stable strategic identity copied from the teacher's deterministic allocation.
+    "home_zone_0",
+    "home_zone_1",
+    "home_zone_2",
+    "mobile_reserve",
     # Movement
     "moved",
     "forward",
     "center_distance",
     "zone_distance",
     "in_zone",
+    "home_zone_distance",
+    "in_home_zone",
     # Support
     "adjacent_allies",
     # Danger
@@ -101,6 +108,32 @@ def oriented_offset(observation, start, end):
     """
     scale = (1 if me.direction(observation) == 2 else -1) / observation["observation"]["battlefield"]["side"]
     return ((end["q"] - start["q"]) * scale, (end["r"] - start["r"]) * scale)
+
+
+def home_zone_assignment(observation):
+    """Return (home_zone_index, mobile_reserve) using the teacher's fixed opening allocation.
+
+    Footmen 0/1, 2/3, and 4/5 belong to zones 0, 1, and 2. Footmen 6/7 are
+    the mobile reserve. Archers and cavalry use index modulo three, matching the Season 5
+    teacher's deterministic allocation.
+    """
+    own = observation["observation"]["self"]
+    unit_type = own["type"]
+    try:
+        index = int(own["unit_id"].rsplit("_", 1)[1])
+    except (KeyError, ValueError, IndexError):
+        return None, 0
+
+    if unit_type == "footman":
+        pair = index // 2
+        if pair <= 2:
+            return pair, 0
+        return None, 1
+
+    if unit_type in {"archer", "cavalry"}:
+        return index % 3, 0
+
+    return None, 0
 
 
 def encode_entities(observation):
@@ -210,7 +243,14 @@ def describe_move(observation, end):
     # To make "forward" mean the same thing for both sides, we measure it along one step
     # toward the enemy side.
     step_q, step_r = tile.DIRECTIONS[me.direction(observation)]
-    zone_centers = [area["center"] for area in zone.zones(observation)]
+    areas = zone.zones(observation)
+    zone_centers = [area["center"] for area in areas]
+    home_zone_index, mobile_reserve = home_zone_assignment(observation)
+    home_zone_center = (
+        areas[home_zone_index]["center"]
+        if home_zone_index is not None and home_zone_index < len(areas)
+        else None
+    )
     ground = tile.terrain_at(observation, end)
     # The destination itself, as a step offset turned to face the enemy side.
     end_q, end_r = oriented_offset(observation, here, end)
@@ -220,6 +260,13 @@ def describe_move(observation, end):
         **one_hot(own["type"], KINDS),
         "hit_points": own["hit_points"],
         "visible_enemies": len(enemies),
+        # The teacher gives different units different strategic homes. Without these features,
+        # multiple same-type units can receive almost identical observations and collapse toward
+        # the same objective.
+        "home_zone_0": int(home_zone_index == 0),
+        "home_zone_1": int(home_zone_index == 1),
+        "home_zone_2": int(home_zone_index == 2),
+        "mobile_reserve": mobile_reserve,
         # Movement: how far the tile is from here, how far it is toward the enemy side, and how
         # far it is from the objectives. All distances are straight-line steps.
         "moved": tile.distance(here, end),
@@ -228,6 +275,16 @@ def describe_move(observation, end):
         "center_distance": tile.distance(end, tile.at_center(observation)),
         "zone_distance": min((tile.distance(end, center) for center in zone_centers), default=FAR),
         "in_zone": int(zone.at(observation, end) is not None),
+        # Relationship to this unit's assigned home objective. Reserve footmen deliberately have
+        # no fixed home, so their home distance stays FAR and mobile_reserve identifies them.
+        "home_zone_distance": (
+            tile.distance(end, home_zone_center) if home_zone_center is not None else FAR
+        ),
+        "in_home_zone": int(
+            home_zone_index is not None
+            and home_zone_index < len(areas)
+            and any(tile.distance(end, spot) == 0 for spot in areas[home_zone_index]["tiles"])
+        ),
         # Support: how many allies stand on the six neighboring tiles.
         "adjacent_allies": sum(
             tile.distance(end, ally["position"]) == 1 for ally in visible.allies(observation)
